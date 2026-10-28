@@ -42,11 +42,11 @@ except Exception as e:
     st.error(f"Greška pri čitanju Excel datoteke: {e}")
     st.stop()
 
-# Funkcija za računanje radnih dana (ponedjeljak - petak)
+# Funkcija za računanje radnih dana (ponedjeljak - petak) - ISPRAVLJENO
 def calc_business_days(start_date, end_date):
     if pd.isna(start_date) or pd.isna(end_date):
         return np.nan
-    bdays = np.busd_count(start_date.date(), end_date.date())
+    bdays = np.busday_count(start_date.date(), end_date.date())
     return int(bdays)
 
 # ---- PRIPREMA PODATAKA I IZRAČUNI ----
