@@ -147,7 +147,7 @@ df['Putanja_Naloga'] = df.apply(classify_order_path, axis=1)
 st.sidebar.header("🔍 Filtri")
 
 skladista = ['Sva skladišta'] + sorted(df['Skladište'].dropna().unique().tolist())
-selected_skladiste = st.sidebar.selectbox("Skladište", skladaista)
+selected_skladiste = st.sidebar.selectbox("Skladište", skladista)
 
 if selected_skladiste != 'Sva skladišta':
     df_filtered = df[df['Skladište'] == selected_skladiste]
