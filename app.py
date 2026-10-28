@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import io
 
 st.set_page_config(
     page_title="Analiza obrade naloga - Komercijala",
@@ -49,6 +50,14 @@ def calc_business_days(start_date, end_date):
     bdays = np.busday_count(start_date.date(), end_date.date())
     return int(bdays)
 
+# Funkcija za eksport u Excel bajtove (uredno odvojeni stupci)
+def convert_df_to_excel(df_to_export):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_to_export.to_excel(writer, index=False, sheet_name='Izvještaj')
+    processed_data = output.getvalue()
+    return processed_data
+
 # ---- PRIPREMA PODATAKA I IZRAČUNI ----
 def get_start_status_date(row):
     if pd.notna(row['Novo']):
@@ -69,7 +78,7 @@ df['Dana_Do_Odobrenja_Ukupno'] = df.apply(
     lambda row: calc_business_days(row['Početni_Datum'], row['Odobrena isporuka']), axis=1
 )
 
-# Precizni izračuni za pojedinačne prijelaze (koriste se za ciljane KPI kartice)
+# Precizni izračuni za pojedinačne prijelaze
 df['Dana_Novo_Do_Odobrenja_Direktno'] = df.apply(
     lambda row: calc_business_days(row['Novo'], row['Odobrena isporuka']) 
     if pd.notna(row['Novo']) and pd.notna(row['Odobrena isporuka']) 
@@ -154,7 +163,7 @@ if selected_skladiste != 'Sva skladišta':
 else:
     df_filtered = df.copy()
 
-# ---- AŽURIRANE KPI KARTICE (PREMA TRAŽENOM) ----
+# ---- AŽURIRANE KPI KARTICE ----
 col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
@@ -203,7 +212,7 @@ with col_b:
     fig_bar = px.bar(metrics_avg, x='Faza', y='Prosjek radnih dana', text_auto='.1f', color='Faza')
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# ---- NOVI DODATAK: IZVJEŠTAJ O PUTANJI NALOGA (DIREKTNO VS MEĐUSTATUSI) ----
+# ---- IZVJEŠTAJ 1: PUTANJA NALOGA (DIREKTNO VS MEĐUSTATUSI) ----
 st.subheader("🔀 Izvještaj: Udio direktnih naloga (Novo -> Odobreno) vs. Međustatusi")
 
 path_subset = df_filtered[df_filtered['Putanja_Naloga'] != 'Nije primjenjivo']
@@ -216,6 +225,14 @@ col_p1, col_p2 = st.columns([1, 2])
 
 with col_p1:
     st.dataframe(path_counts, use_container_width=True, hide_index=True)
+    # Gumb za preuzimanje Izvještaja 1 u Excel
+    excel_data_1 = convert_df_to_excel(path_counts)
+    st.download_button(
+        label="📥 Preuzmi izvještaj u Excel",
+        data=excel_data_1,
+        file_name="putanja_naloga.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 with col_p2:
     fig_path = px.pie(
@@ -227,7 +244,7 @@ with col_p2:
     )
     st.plotly_chart(fig_path, use_container_width=True)
 
-# ---- IZVJEŠTAJ S POSTOCIMA: OD POČETNOG STATUSA DO ODOBRENE ISPORUKE ----
+# ---- IZVJEŠTAJ 2: VRIJEME OBRADE OD POČETNOG STATUSA DO ODOBRENE ISPORUKE ----
 st.subheader("⏱️ Izvještaj: Vrijeme obrade od početnog statusa do odobrene isporuke (s udjelima)")
 
 order_categories = ['1 dan', '2 dana', '2 - 5 dana', '5 - 10 dana', 'Više od 10 dana', 'Nema podataka']
@@ -241,6 +258,14 @@ col_c1, col_c2 = st.columns([1, 2])
 
 with col_c1:
     st.dataframe(cat_counts, use_container_width=True, hide_index=True)
+    # Gumb za preuzimanje Izvještaja 2 u Excel
+    excel_data_2 = convert_df_to_excel(cat_counts)
+    st.download_button(
+        label="📥 Preuzmi izvještaj u Excel",
+        data=excel_data_2,
+        file_name="vrijeme_obrade_pocetni.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 with col_c2:
     fig_hist = px.bar(
@@ -254,7 +279,7 @@ with col_c2:
     fig_hist.update_traces(textposition='outside')
     st.plotly_chart(fig_hist, use_container_width=True)
 
-# ---- NOVI IZVJEŠTAJ: OD (NOVO / WEBSHOP NOVO / BACKORDER) DO ODOBRENJA ----
+# ---- IZVJEŠTAJ 3: OD (NOVO / WEBSHOP NOVO / BACKORDER) DO ODOBRENJA ----
 st.subheader("⏱️ Izvještaj: Vrijeme obrade od (Novo / Webshop Novo / Backorder) do Odobrenja")
 
 ext_counts = df_filtered['Kategorija_Dana_Ext'].value_counts().reindex(order_categories).fillna(0).reset_index()
@@ -266,6 +291,14 @@ col_e1, col_e2 = st.columns([1, 2])
 
 with col_e1:
     st.dataframe(ext_counts, use_container_width=True, hide_index=True)
+    # Gumb za preuzimanje Izvještaja 3 u Excel
+    excel_data_3 = convert_df_to_excel(ext_counts)
+    st.download_button(
+        label="📥 Preuzmi izvještaj u Excel",
+        data=excel_data_3,
+        file_name="vrijeme_obrade_proireno.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 with col_e2:
     fig_ext = px.bar(
@@ -281,10 +314,20 @@ with col_e2:
 
 # ---- TABLICA S REZULTATIMA ----
 st.subheader("📋 Detaljni pregled naloga i izračunatih dana")
-st.dataframe(df_filtered[[
+detailed_df = df_filtered[[
     'Broj naloga', 'Naziv partnera', 'Skladište', 'Početni_Status_Tip', 
     'Putanja_Naloga', 'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
     'Dana_Ext_Do_Odobrenja', 'Kategorija_Dana_Ext',
     'Dana_Rezervacija_Do_Odobrenja', 'Dana_Prioritetna_Do_Odobrenja', 
     'Dana_CekaRaspolozivost_Do_Odobrenja'
-]], use_container_width=True)
+]]
+st.dataframe(detailed_df, use_container_width=True)
+
+# Gumb za preuzimanje kompletne detaljne tablice u Excel
+excel_data_detailed = convert_df_to_excel(detailed_df)
+st.download_button(
+    label="📥 Preuzmi cijelu detaljnu tablicu u Excel",
+    data=excel_data_detailed,
+    file_name="detaljni_pregled_naloga.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
