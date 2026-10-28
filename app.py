@@ -102,7 +102,7 @@ df['Dana_CekaRaspolozivost_Do_Odobrenja'] = df.apply(
     lambda row: calc_business_days(row['Čeka potpunu raspoloživost'], row['Odobrena isporuka']), axis=1
 )
 
-# ---- KATEGORIZACIJA PO VREMENSKIM RASPONIMA (S DODANIM RAZREDOM "0 dana") ----
+# ---- KATEGORIZACIJA PO VREMENSKIM RASPONIMA ----
 def categorize_days(days):
     if pd.isna(days):
         return 'Nema podataka'
@@ -120,23 +120,6 @@ def categorize_days(days):
         return 'Više od 10 dana'
 
 df['Kategorija_Dana'] = df['Dana_Do_Odobrenja_Ukupno'].apply(categorize_days)
-
-# ---- NOVI IZVJEŠTAJ: OD (NOVO / WEBSHOP NOVO / BACKORDER) DO ODOBRENJA ----
-def get_earliest_start_extended(row):
-    dates = []
-    if pd.notna(row['Novo']):
-        dates.append(row['Novo'])
-    if pd.notna(row['Webshop - Novo']):
-        dates.append(row['Webshop - Novo'])
-    if pd.notna(row['Backorder – snimljena djelomična isporuka']):
-        dates.append(row['Backorder – snimljena djelomična isporuka'])
-    return min(dates) if dates else pd.NaT
-
-df['Earliest_Start_Ext'] = df.apply(get_earliest_start_extended, axis=1)
-df['Dana_Ext_Do_Odobrenja'] = df.apply(
-    lambda row: calc_business_days(row['Earliest_Start_Ext'], row['Odobrena isporuka']), axis=1
-)
-df['Kategorija_Dana_Ext'] = df['Dana_Ext_Do_Odobrenja'].apply(categorize_days)
 
 # ---- NOVI IZVJEŠTAJ: PUTANJA NALOGA (DIREKTNO VS MEĐUSTATUSI) ----
 def classify_order_path(row):
@@ -279,38 +262,6 @@ with col_c2:
     fig_hist.update_traces(textposition='outside')
     st.plotly_chart(fig_hist, use_container_width=True)
 
-# ---- IZVJEŠTAJ 3: OD (NOVO / WEBSHOP NOVO / BACKORDER) DO ODOBRENJA ----
-st.subheader("⏱️ Izvještaj: Vrijeme obrade od (Novo / Webshop Novo / Backorder) do Odobrenja")
-
-ext_counts = df_filtered['Kategorija_Dana_Ext'].value_counts().reindex(order_categories).fillna(0).reset_index()
-ext_counts.columns = ['Vremenski raspon', 'Broj naloga']
-total_ext = len(df_filtered)
-ext_counts['Postotak (%)'] = (ext_counts['Broj naloga'] / total_ext * 100).round(2) if total_ext > 0 else 0
-
-col_e1, col_e2 = st.columns([1, 2])
-
-with col_e1:
-    st.dataframe(ext_counts, use_container_width=True, hide_index=True)
-    excel_data_3 = convert_df_to_excel(ext_counts)
-    st.download_button(
-        label="📥 Preuzmi izvještaj u Excel",
-        data=excel_data_3,
-        file_name="vrijeme_obrade_proireno.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-with col_e2:
-    fig_ext = px.bar(
-        ext_counts[ext_counts['Vremenski raspon'] != 'Nema podataka'], 
-        x='Vremenski raspon', 
-        y='Broj naloga', 
-        text=ext_counts[ext_counts['Vremenski raspon'] != 'Nema podataka']['Postotak (%)'].apply(lambda x: f"{x}%"),
-        color='Vremenski raspon',
-        title="Udio (%) po rasponu (Novo / Webshop Novo / Backorder -> Odobrenje)"
-    )
-    fig_ext.update_traces(textposition='outside')
-    st.plotly_chart(fig_ext, use_container_width=True)
-
 # ---- TABLICA S REZULTATIMA (SVI TOČNI DATUMI I DANI) ----
 st.subheader("📋 Detaljni pregled naloga, točnih datuma po statusima i izračunatih dana")
 detailed_df = df_filtered[[
@@ -319,7 +270,6 @@ detailed_df = df_filtered[[
     'Rezervacija', 'Prioritetna rezervacija', 'Čeka potpunu raspoloživost', 'Odobrena isporuka',
     'Početni_Status_Tip', 'Putanja_Naloga', 
     'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
-    'Dana_Ext_Do_Odobrenja', 'Kategorija_Dana_Ext',
     'Dana_Rezervacija_Do_Odobrenja', 'Dana_Prioritetna_Do_Odobrenja', 
     'Dana_CekaRaspolozivost_Do_Odobrenja'
 ]]
