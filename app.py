@@ -98,13 +98,28 @@ def categorize_days(days):
 
 df['Kategorija_Dana'] = df['Dana_Do_Odobrenja_Ukupno'].apply(categorize_days)
 
+# ---- NOVI IZVJEŠTAJ: OD (NOVO / WEBSHOP NOVO / BACKORDER) DO ODOBRENJA ----
+def get_earliest_start_extended(row):
+    dates = []
+    if pd.notna(row['Novo']):
+        dates.append(row['Novo'])
+    if pd.notna(row['Webshop - Novo']):
+        dates.append(row['Webshop - Novo'])
+    if pd.notna(row['Backorder – snimljena djelomična isporuka']):
+        dates.append(row['Backorder – snimljena djelomična isporuka'])
+    return min(dates) if dates else pd.NaT
+
+df['Earliest_Start_Ext'] = df.apply(get_earliest_start_extended, axis=1)
+df['Dana_Ext_Do_Odobrenja'] = df.apply(
+    lambda row: calc_business_days(row['Earliest_Start_Ext'], row['Odobrena isporuka']), axis=1
+)
+df['Kategorija_Dana_Ext'] = df['Dana_Ext_Do_Odobrenja'].apply(categorize_days)
+
 # ---- NOVI IZVJEŠTAJ: PUTANJA NALOGA (DIREKTNO VS MEĐUSTATUSI) ----
 def classify_order_path(row):
-    # Gledamo samo naloge koji imaju definiran 'Novo' i 'Odobrena isporuka'
     if pd.isna(row['Novo']) or pd.isna(row['Odobrena isporuka']):
         return 'Nije primjenjivo'
     
-    # Provjera postojanja datuma u međustatusima
     has_rez = pd.notna(row['Rezervacija'])
     has_prio = pd.notna(row['Prioritetna rezervacija'])
     has_ceka = pd.notna(row['Čeka potpunu raspoloživost'])
@@ -201,7 +216,6 @@ st.subheader("⏱️ Izvještaj: Vrijeme obrade od početnog statusa do odobrene
 
 order_categories = ['1 dan', '2 dana', '2 - 5 dana', '5 - 10 dana', 'Više od 10 dana', 'Nema podataka']
 
-# Izračun broja naloga i postotaka
 cat_counts = df_filtered['Kategorija_Dana'].value_counts().reindex(order_categories).fillna(0).reset_index()
 cat_counts.columns = ['Vremenski raspon', 'Broj naloga']
 total_naloga = len(df_filtered)
@@ -224,11 +238,37 @@ with col_c2:
     fig_hist.update_traces(textposition='outside')
     st.plotly_chart(fig_hist, use_container_width=True)
 
+# ---- NOVI IZVJEŠTAJ: OD (NOVO / WEBSHOP NOVO / BACKORDER) DO ODOBRENJA ----
+st.subheader("⏱️ Izvještaj: Vrijeme obrade od (Novo / Webshop Novo / Backorder) do Odobrenja")
+
+ext_counts = df_filtered['Kategorija_Dana_Ext'].value_counts().reindex(order_categories).fillna(0).reset_index()
+ext_counts.columns = ['Vremenski raspon', 'Broj naloga']
+total_ext = len(df_filtered)
+ext_counts['Postotak (%)'] = (ext_counts['Broj naloga'] / total_ext * 100).round(2) if total_ext > 0 else 0
+
+col_e1, col_e2 = st.columns([1, 2])
+
+with col_e1:
+    st.dataframe(ext_counts, use_container_width=True, hide_index=True)
+
+with col_e2:
+    fig_ext = px.bar(
+        ext_counts[ext_counts['Vremenski raspon'] != 'Nema podataka'], 
+        x='Vremenski raspon', 
+        y='Broj naloga', 
+        text=ext_counts[ext_counts['Vremenski raspon'] != 'Nema podataka']['Postotak (%)'].apply(lambda x: f"{x}%"),
+        color='Vremenski raspon',
+        title="Udio (%) po rasponu (Novo / Webshop Novo / Backorder -> Odobrenje)"
+    )
+    fig_ext.update_traces(textposition='outside')
+    st.plotly_chart(fig_ext, use_container_width=True)
+
 # ---- TABLICA S REZULTATIMA ----
 st.subheader("📋 Detaljni pregled naloga i izračunatih dana")
 st.dataframe(df_filtered[[
     'Broj naloga', 'Naziv partnera', 'Skladište', 'Početni_Status_Tip', 
     'Putanja_Naloga', 'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
+    'Dana_Ext_Do_Odobrenja', 'Kategorija_Dana_Ext',
     'Dana_Rezervacija_Do_Odobrenja', 'Dana_Prioritetna_Do_Odobrenja', 
     'Dana_CekaRaspolozivost_Do_Odobrenja'
 ]], use_container_width=True)
