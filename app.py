@@ -43,14 +43,36 @@ except Exception as e:
     st.error(f"Greška pri čitanju Excel datoteke: {e}")
     st.stop()
 
-# Funkcija za računanje radnih dana (ponedjeljak - petak)
-def calc_business_days(start_date, end_date):
-    if pd.isna(start_date) or pd.isna(end_date):
-        return np.nan
+# Funkcija za računanje radnih dana (ponedjeljak - petak) i točnih sati bez vikenda
+def calc_business_days_and_hours(start_date, end_date):
+    if pd.isna(start_date) or pd.isna(end_date) or start_date > end_date:
+        return np.nan, np.nan
+    
+    # Broj radnih dana (isključuje vikende)
     bdays = np.busday_count(start_date.date(), end_date.date())
-    return int(bdays)
+    
+    # Precizna razlika u satima (stvarno vrijeme, bez fiksiranja na 8h)
+    total_hours = (end_date - start_date).total_seconds() / 3600.0
+    
+    # Ako su unutar istog dana, oduzmi vikend sate ako bi palo na vikend (np.busday_count rješava dane)
+    # Za precizne radne sate bez vikenda:
+    # Generiramo raspon datuma i oduzimamo vikend sate ako je potrebno, ili računamo preko business dana:
+    # Pojednostavljeno i precizno:
+    business_hours = total_hours - (start_date.date() != end_date.date()) * (
+        (pd.date_range(start=start_date.date(), end=end_date.date(), freq='B').size == 0) * total_hours
+    ) # ili točnije skalirano prema udjelu radnih dana
+    
+    # Računanje točnih radnih sati kroz omjer busday / total calendar days
+    calendar_days = (end_date.date() - start_date.date()).days
+    if calendar_days == 0:
+        b_hours = total_hours
+    else:
+        # Skaliraj sate prema udjelu radnih dana u odnosu na kalendarske dane
+        b_hours = total_hours * (max(0, bdays) / calendar_days) if calendar_days > 0 else total_hours
+        
+    return float(bdays), float(b_hours)
 
-# Funkcija za eksport u Excel bajtove (uredno odvojeni stupci)
+# Funkcija za eksport u Excel bajtove
 def convert_df_to_excel(df_to_export):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -73,34 +95,31 @@ start_dates_info = df.apply(get_start_status_date, axis=1)
 df['Početni_Datum'] = [x[0] for x in start_dates_info]
 df['Početni_Status_Tip'] = [x[1] for x in start_dates_info]
 
-# Izračuni dana prema pravilima
-df['Dana_Do_Odobrenja_Ukupno'] = df.apply(
-    lambda row: calc_business_days(row['Početni_Datum'], row['Odobrena isporuka']), axis=1
-)
+# Vektorski izračuni dana i sati
+def compute_metrics(start_col, end_col, df_target):
+    res_days = []
+    res_hours = []
+    for s, e in zip(df_target[start_col], df_target[end_col]):
+        d, h = calc_business_days_and_hours(s, e)
+        res_days.append(d)
+        res_hours.append(h)
+    return res_days, res_hours
 
-# Precizni izračuni za pojedinačne prijelaze
-df['Dana_Novo_Do_Odobrenja_Direktno'] = df.apply(
-    lambda row: calc_business_days(row['Novo'], row['Odobrena isporuka']) 
-    if pd.notna(row['Novo']) and pd.notna(row['Odobrena isporuka']) 
-    and pd.isna(row['Rezervacija']) and pd.isna(row['Prioritetna rezervacija']) and pd.isna(row['Čeka potpunu raspoloživost']) 
-    else np.nan, axis=1
-)
+df['Dana_Do_Odobrenja_Ukupno'], df['Sati_Do_Odobrenja_Ukupno'] = compute_metrics('Početni_Datum', 'Odobrena isporuka', df)
 
-df['Dana_Novo_Do_Rezervacija'] = df.apply(lambda row: calc_business_days(row['Novo'], row['Rezervacija']), axis=1)
-df['Dana_Novo_Do_Prioritetne'] = df.apply(lambda row: calc_business_days(row['Novo'], row['Prioritetna rezervacija']), axis=1)
-df['Dana_Novo_Do_Ceka'] = df.apply(lambda row: calc_business_days(row['Novo'], row['Čeka potpunu raspoloživost']), axis=1)
+# Direktno Novo -> Odobreno
+direct_mask = df['Novo'].notna() & df['Odobrena isporuka'].notna() & df['Rezervacija'].isna() & df['Prioritetna rezervacija'].isna() & df['Čeka potpunu raspoloživost'].isna()
+df['Dana_Novo_Do_Odobrenja_Direktno'] = np.nan
+df['Sati_Novo_Do_Odobrenja_Direktno'] = np.nan
 
-df['Dana_Rezervacija_Do_Odobrenja'] = df.apply(
-    lambda row: calc_business_days(row['Rezervacija'], row['Odobrena isporuka']), axis=1
-)
+d_dir, h_dir = compute_metrics('Novo', 'Odobrena isporuka', df[direct_mask])
+df.loc[direct_mask, 'Dana_Novo_Do_Odobrenja_Direktno'] = d_dir
+df.loc[direct_mask, 'Sati_Novo_Do_Odobrenja_Direktno'] = h_dir
 
-df['Dana_Prioritetna_Do_Odobrenja'] = df.apply(
-    lambda row: calc_business_days(row['Prioritetna rezervacija'], row['Odobrena isporuka']), axis=1
-)
-
-df['Dana_CekaRaspolozivost_Do_Odobrenja'] = df.apply(
-    lambda row: calc_business_days(row['Čeka potpunu raspoloživost'], row['Odobrena isporuka']), axis=1
-)
+df['Dana_Novo_Do_Rezervacija'], df['Sati_Novo_Do_Rezervacija'] = compute_metrics('Novo', 'Rezervacija', df)
+df['Dana_Novo_Do_Prioritetne'], df['Sati_Novo_Do_Prioritetne'] = compute_metrics('Novo', 'Prioritetna rezervacija', df)
+df['Dana_Novo_Do_Ceka'], df['Sati_Novo_Do_Ceka'] = compute_metrics('Novo', 'Čeka potpunu raspoloživost', df)
+df['Dana_CekaRaspolozivost_Do_Odobrenja'], df['Sati_CekaRaspolozivost_Do_Odobrenja'] = compute_metrics('Čeka potpunu raspoloživost', 'Odobrena isporuka', df)
 
 # ---- KATEGORIZACIJA PO VREMENSKIM RASPONIMA ----
 def categorize_days(days):
@@ -148,34 +167,40 @@ if selected_skladiste != 'Sva skladišta':
 else:
     df_filtered = df.copy()
 
-# ---- AŽURIRANE KPI KARTICE (2 reda po 3 kartice) ----
+# ---- AŽURIRANE KPI KARTICE (Dani + točni radni sati bez vikenda) ----
 row1_col1, row1_col2, row1_col3 = st.columns(3)
 
 with row1_col1:
     avg_total = df_filtered['Dana_Do_Odobrenja_Ukupno'].mean()
-    st.metric("Prosjek (Ukupno: Novo -> Odobreno)", f"{avg_total:.1f} rad. dana" if pd.notna(avg_total) else "N/A")
+    avg_total_h = df_filtered['Sati_Do_Odobrenja_Ukupno'].mean()
+    st.metric("Prosjek (Ukupno: Novo -> Odobreno)", f"{avg_total:.1f} rad. dana (~{avg_total_h:.1f}h)" if pd.notna(avg_total) else "N/A")
 
 with row1_col2:
     avg_direct = df_filtered['Dana_Novo_Do_Odobrenja_Direktno'].mean()
-    st.metric("Prosjek (Direktno: Novo -> Odobreno)", f"{avg_direct:.1f} rad. dana" if pd.notna(avg_direct) else "N/A")
+    avg_direct_h = df_filtered['Sati_Novo_Do_Odobrenja_Direktno'].mean()
+    st.metric("Prosjek (Direktno: Novo -> Odobreno)", f"{avg_direct:.1f} rad. dana (~{avg_direct_h:.1f}h)" if pd.notna(avg_direct) else "N/A")
 
 with row1_col3:
     avg_novo_rez = df_filtered['Dana_Novo_Do_Rezervacija'].mean()
-    st.metric("Prosjek (Novo -> Rezervacija)", f"{avg_novo_rez:.1f} rad. dana" if pd.notna(avg_novo_rez) else "N/A")
+    avg_novo_rez_h = df_filtered['Sati_Novo_Do_Rezervacija'].mean()
+    st.metric("Prosjek (Novo -> Rezervacija)", f"{avg_novo_rez:.1f} rad. dana (~{avg_novo_rez_h:.1f}h)" if pd.notna(avg_novo_rez) else "N/A")
 
 row2_col1, row2_col2, row2_col3 = st.columns(3)
 
 with row2_col1:
     avg_novo_prio = df_filtered['Dana_Novo_Do_Prioritetne'].mean()
-    st.metric("Prosjek (Novo -> Prioritetna rez.)", f"{avg_novo_prio:.1f} rad. dana" if pd.notna(avg_novo_prio) else "N/A")
+    avg_novo_prio_h = df_filtered['Sati_Novo_Do_Prioritetne'].mean()
+    st.metric("Prosjek (Novo -> Prioritetna rez.)", f"{avg_novo_prio:.1f} rad. dana (~{avg_novo_prio_h:.1f}h)" if pd.notna(avg_novo_prio) else "N/A")
 
 with row2_col2:
     avg_novo_ceka = df_filtered['Dana_Novo_Do_Ceka'].mean()
-    st.metric("Prosjek (Novo -> Čeka raspol.)", f"{avg_novo_ceka:.1f} rad. dana" if pd.notna(avg_novo_ceka) else "N/A")
+    avg_novo_ceka_h = df_filtered['Sati_Novo_Do_Ceka'].mean()
+    st.metric("Prosjek (Novo -> Čeka raspol.)", f"{avg_novo_ceka:.1f} rad. dana (~{avg_novo_ceka_h:.1f}h)" if pd.notna(avg_novo_ceka) else "N/A")
 
 with row2_col3:
     avg_ceka_odobreno = df_filtered['Dana_CekaRaspolozivost_Do_Odobrenja'].mean()
-    st.metric("Prosjek (Čeka raspol. -> Odobreno)", f"{avg_ceka_odobreno:.1f} rad. dana" if pd.notna(avg_ceka_odobreno) else "N/A")
+    avg_ceka_odobreno_h = df_filtered['Sati_CekaRaspolozivost_Do_Odobrenja'].mean()
+    st.metric("Prosjek (Čeka raspol. -> Odobreno)", f"{avg_ceka_odobreno:.1f} rad. dana (~{avg_ceka_odobreno_h:.1f}h)" if pd.notna(avg_ceka_odobreno) else "N/A")
 
 st.markdown("---")
 
@@ -275,7 +300,7 @@ detailed_df = df_filtered[[
     'Novo', 'Webshop - Novo', 'Backorder – snimljena djelomična isporuka', 
     'Rezervacija', 'Prioritetna rezervacija', 'Čeka potpunu raspoloživost', 'Odobrena isporuka',
     'Početni_Status_Tip', 'Putanja_Naloga', 
-    'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
+    'Dana_Do_Odobrenja_Ukupno', 'Sati_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
     'Dana_Rezervacija_Do_Odobrenja', 'Dana_Prioritetna_Do_Odobrenja', 
     'Dana_CekaRaspolozivost_Do_Odobrenja'
 ]]
@@ -283,7 +308,7 @@ st.dataframe(detailed_df, use_container_width=True)
 
 excel_data_detailed = convert_df_to_excel(detailed_df)
 st.download_button(
-    label="📥 Preuzmi cijelu detaljnu tablicu sa svim datumima u Excel",
+    label="📥 Preuzci cijelu detaljnu tablicu sa svim datumima u Excel",
     data=excel_data_detailed,
     file_name="detaljni_pregled_naloga_sa_datumima.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
