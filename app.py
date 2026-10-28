@@ -102,10 +102,12 @@ df['Dana_CekaRaspolozivost_Do_Odobrenja'] = df.apply(
     lambda row: calc_business_days(row['Čeka potpunu raspoloživost'], row['Odobrena isporuka']), axis=1
 )
 
-# ---- KATEGORIZACIJA PO VREMENSKIM RASPONIMA ----
+# ---- KATEGORIZACIJA PO VREMENSKIM RASPONIMA (S DODANIM RAZREDOM "0 dana") ----
 def categorize_days(days):
     if pd.isna(days):
         return 'Nema podataka'
+    elif days == 0:
+        return '0 dana'
     elif days == 1:
         return '1 dan'
     elif days == 2:
@@ -246,7 +248,7 @@ with col_p2:
 # ---- IZVJEŠTAJ 2: VRIJEME OBRADE OD POČETNOG STATUSA DO ODOBRENE ISPORUKE ----
 st.subheader("⏱️ Izvještaj: Vrijeme obrade od početnog statusa do odobrene isporuke (s udjelima)")
 
-order_categories = ['1 dan', '2 dana', '2 - 5 dana', '5 - 10 dana', 'Više od 10 dana', 'Nema podataka']
+order_categories = ['0 dana', '1 dan', '2 dana', '2 - 5 dana', '5 - 10 dana', 'Više od 10 dana', 'Nema podataka']
 
 cat_counts = df_filtered['Kategorija_Dana'].value_counts().reindex(order_categories).fillna(0).reset_index()
 cat_counts.columns = ['Vremenski raspon', 'Broj naloga']
@@ -323,7 +325,6 @@ detailed_df = df_filtered[[
 ]]
 st.dataframe(detailed_df, use_container_width=True)
 
-# Gumb za preuzimanje kompletne detaljne tablice sa svim datumima u Excel
 excel_data_detailed = convert_df_to_excel(detailed_df)
 st.download_button(
     label="📥 Preuzmi cijelu detaljnu tablicu sa svim datumima u Excel",
