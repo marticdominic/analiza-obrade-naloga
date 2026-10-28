@@ -142,24 +142,29 @@ if selected_skladiste != 'Sva skladišta':
 else:
     df_filtered = df.copy()
 
-# ---- GLAVNI PRIKAZ - KPI KARTICE ----
-col1, col2, col3, col4 = st.columns(4)
+# ---- GLAVNI PRIKAZ - OPERATIVNI KPI KARTICE ----
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     avg_total = df_filtered['Dana_Do_Odobrenja_Ukupno'].mean()
-    st.metric("Prosjek (Početak -> Odobrenje)", f"{avg_total:.1f} radnih dana" if pd.notna(avg_total) else "N/A")
+    st.metric("Prosjek (Početak -> Odobrenje)", f"{avg_total:.1f} rad. dana" if pd.notna(avg_total) else "N/A")
 
 with col2:
-    avg_rez = df_filtered['Dana_Rezervacija_Do_Odobrenja'].mean()
-    st.metric("Prosjek (Rezervacija -> Odobrenje)", f"{avg_rez:.1f} radnih dana" if pd.notna(avg_rez) else "N/A")
+    median_total = df_filtered['Dana_Do_Odobrenja_Ukupno'].median()
+    st.metric("Medijan (Srednja vrijednost)", f"{int(median_total)} rad. dana" if pd.notna(median_total) else "N/A")
 
 with col3:
-    avg_prio = df_filtered['Dana_Prioritetna_Do_Odobrenja'].mean()
-    st.metric("Prosjek (Prioritetna -> Odobrenje)", f"{avg_prio:.1f} radnih dana" if pd.notna(avg_prio) else "N/A")
+    valid_days_count = df_filtered['Dana_Do_Odobrenja_Ukupno'].dropna()
+    pct_within_2 = (valid_days_count <= 2).mean() * 100 if len(valid_days_count) > 0 else 0
+    st.metric("Riješeno unutar 2 dana", f"{pct_within_2:.1f}%")
 
 with col4:
+    avg_rez = df_filtered['Dana_Rezervacija_Do_Odobrenja'].mean()
+    st.metric("Prosjek (Rezervacija)", f"{avg_rez:.1f} rad. dana" if pd.notna(avg_rez) else "N/A")
+
+with col5:
     avg_ceka = df_filtered['Dana_CekaRaspolozivost_Do_Odobrenja'].mean()
-    st.metric("Prosjek (Čeka raspoloživost -> Odobrenje)", f"{avg_ceka:.1f} radnih dana" if pd.notna(avg_ceka) else "N/A")
+    st.metric("Prosjek (Čeka raspol.)", f"{avg_ceka:.1f} rad. dana" if pd.notna(avg_ceka) else "N/A")
 
 st.markdown("---")
 
