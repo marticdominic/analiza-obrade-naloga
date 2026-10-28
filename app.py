@@ -98,6 +98,24 @@ def categorize_days(days):
 
 df['Kategorija_Dana'] = df['Dana_Do_Odobrenja_Ukupno'].apply(categorize_days)
 
+# ---- NOVI IZVJEŠTAJ: PUTANJA NALOGA (DIREKTNO VS MEĐUSTATUSI) ----
+def classify_order_path(row):
+    # Gledamo samo naloge koji imaju definiran 'Novo' i 'Odobrena isporuka'
+    if pd.isna(row['Novo']) or pd.isna(row['Odobrena isporuka']):
+        return 'Nije primjenjivo'
+    
+    # Provjera postojanja datuma u međustatusima
+    has_rez = pd.notna(row['Rezervacija'])
+    has_prio = pd.notna(row['Prioritetna rezervacija'])
+    has_ceka = pd.notna(row['Čeka potpunu raspoloživost'])
+    
+    if not has_rez and not has_prio and not has_ceka:
+        return 'Direktno (Novo -> Odobreno)'
+    else:
+        return 'Preko međustatusa (Rezervacija / Čeka raspoloživost)'
+
+df['Putanja_Naloga'] = df.apply(classify_order_path, axis=1)
+
 # ---- SIDEBAR FILTRI ----
 st.sidebar.header("🔍 Filtri")
 
@@ -154,6 +172,30 @@ with col_b:
     fig_bar = px.bar(metrics_avg, x='Faza', y='Prosjek radnih dana', text_auto='.1f', color='Faza')
     st.plotly_chart(fig_bar, use_container_width=True)
 
+# ---- NOVI DODATAK: IZVJEŠTAJ O PUTANJI NALOGA (DIREKTNO VS MEĐUSTATUSI) ----
+st.subheader("🔀 Izvještaj: Udio direktnih naloga (Novo -> Odobreno) vs. Međustatusi")
+
+path_subset = df_filtered[df_filtered['Putanja_Naloga'] != 'Nije primjenjivo']
+path_counts = path_subset['Putanja_Naloga'].value_counts().reset_index()
+path_counts.columns = ['Putanja', 'Broj naloga']
+total_path = len(path_subset)
+path_counts['Postotak (%)'] = (path_counts['Broj naloga'] / total_path * 100).round(2) if total_path > 0 else 0
+
+col_p1, col_p2 = st.columns([1, 2])
+
+with col_p1:
+    st.dataframe(path_counts, use_container_width=True, hide_index=True)
+
+with col_p2:
+    fig_path = px.pie(
+        path_counts, 
+        names='Putanja', 
+        values='Broj naloga', 
+        hole=0.4,
+        title="Udio naloga po putanji obrade"
+    )
+    st.plotly_chart(fig_path, use_container_width=True)
+
 # ---- IZVJEŠTAJ S POSTOCIMA: OD POČETNOG STATUSA DO ODOBRENE ISPORUKE ----
 st.subheader("⏱️ Izvještaj: Vrijeme obrade od početnog statusa do odobrene isporuke (s udjelima)")
 
@@ -186,6 +228,7 @@ with col_c2:
 st.subheader("📋 Detaljni pregled naloga i izračunatih dana")
 st.dataframe(df_filtered[[
     'Broj naloga', 'Naziv partnera', 'Skladište', 'Početni_Status_Tip', 
-    'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 'Dana_Rezervacija_Do_Odobrenja', 
-    'Dana_Prioritetna_Do_Odobrenja', 'Dana_CekaRaspolozivost_Do_Odobrenja'
+    'Putanja_Naloga', 'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
+    'Dana_Rezervacija_Do_Odobrenja', 'Dana_Prioritetna_Do_Odobrenja', 
+    'Dana_CekaRaspolozivost_Do_Odobrenja'
 ]], use_container_width=True)
