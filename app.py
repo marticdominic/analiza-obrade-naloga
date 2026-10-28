@@ -225,7 +225,6 @@ col_p1, col_p2 = st.columns([1, 2])
 
 with col_p1:
     st.dataframe(path_counts, use_container_width=True, hide_index=True)
-    # Gumb za preuzimanje Izvještaja 1 u Excel
     excel_data_1 = convert_df_to_excel(path_counts)
     st.download_button(
         label="📥 Preuzmi izvještaj u Excel",
@@ -258,7 +257,6 @@ col_c1, col_c2 = st.columns([1, 2])
 
 with col_c1:
     st.dataframe(cat_counts, use_container_width=True, hide_index=True)
-    # Gumb za preuzimanje Izvještaja 2 u Excel
     excel_data_2 = convert_df_to_excel(cat_counts)
     st.download_button(
         label="📥 Preuzmi izvještaj u Excel",
@@ -291,7 +289,6 @@ col_e1, col_e2 = st.columns([1, 2])
 
 with col_e1:
     st.dataframe(ext_counts, use_container_width=True, hide_index=True)
-    # Gumb za preuzimanje Izvještaja 3 u Excel
     excel_data_3 = convert_df_to_excel(ext_counts)
     st.download_button(
         label="📥 Preuzmi izvještaj u Excel",
@@ -312,22 +309,25 @@ with col_e2:
     fig_ext.update_traces(textposition='outside')
     st.plotly_chart(fig_ext, use_container_width=True)
 
-# ---- TABLICA S REZULTATIMA ----
-st.subheader("📋 Detaljni pregled naloga i izračunatih dana")
+# ---- TABLICA S REZULTATIMA (SVI TOČNI DATUMI I DANI) ----
+st.subheader("📋 Detaljni pregled naloga, točnih datuma po statusima i izračunatih dana")
 detailed_df = df_filtered[[
-    'Broj naloga', 'Naziv partnera', 'Skladište', 'Početni_Status_Tip', 
-    'Putanja_Naloga', 'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
+    'Broj naloga', 'Naziv partnera', 'Skladište', 
+    'Novo', 'Webshop - Novo', 'Backorder – snimljena djelomična isporuka', 
+    'Rezervacija', 'Prioritetna rezervacija', 'Čeka potpunu raspoloživost', 'Odobrena isporuka',
+    'Početni_Status_Tip', 'Putanja_Naloga', 
+    'Dana_Do_Odobrenja_Ukupno', 'Kategorija_Dana', 
     'Dana_Ext_Do_Odobrenja', 'Kategorija_Dana_Ext',
     'Dana_Rezervacija_Do_Odobrenja', 'Dana_Prioritetna_Do_Odobrenja', 
     'Dana_CekaRaspolozivost_Do_Odobrenja'
 ]]
 st.dataframe(detailed_df, use_container_width=True)
 
-# Gumb za preuzimanje kompletne detaljne tablice u Excel
+# Gumb za preuzimanje kompletne detaljne tablice sa svim datumima u Excel
 excel_data_detailed = convert_df_to_excel(detailed_df)
 st.download_button(
-    label="📥 Preuzmi cijelu detaljnu tablicu u Excel",
+    label="📥 Preuzmi cijelu detaljnu tablicu sa svim datumima u Excel",
     data=excel_data_detailed,
-    file_name="detaljni_pregled_naloga.xlsx",
+    file_name="detaljni_pregled_naloga_sa_datumima.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
