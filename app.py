@@ -9,10 +9,19 @@ st.set_page_config(
     layout="wide"
 )
 
+st.title("📊 Analiza obrade naloga komercijala")
+st.markdown("Učitaj svoju Excel datoteku i prati vrijeme obrade naloga od početnih statusa do odobrene isporuke.")
+
+# Učitavanje datoteke preko sučelja
+uploaded_file = st.file_uploader("Učitaj Excel datoteku (Analiza obrade naloga komercijala.xlsx)", type=["xlsx", "xls"])
+
+if uploaded_file is None:
+    st.info("👆 Molimo učitajte Excel datoteku kako bi se prikazala analiza.")
+    st.stop()
+
 @st.cache_data
-def load_data():
-    file_path = "Analiza obrade naloga komercijala.xlsx"
-    df = pd.read_excel(file_path, sheet_name="Analiza_naloga_po_statusima")
+def load_data(file):
+    df = pd.read_excel(file, sheet_name="Analiza_naloga_po_statusima")
     
     # Pretvorba datumskih polja
     date_cols = [
@@ -28,24 +37,19 @@ def load_data():
     return df
 
 try:
-    df = load_data()
+    df = load_data(uploaded_file)
 except Exception as e:
-    st.error(f"Greška pri učitavanju datoteke: {e}")
+    st.error(f"Greška pri čitanju Excel datoteke: {e}")
     st.stop()
-
-st.title("📊 Analiza obrade naloga komercijala")
-st.markdown("Praćenje vremena obrade naloga od početnih statusa do odobrene isporuke.")
 
 # Funkcija za računanje radnih dana (ponedjeljak - petak)
 def calc_business_days(start_date, end_date):
     if pd.isna(start_date) or pd.isna(end_date):
         return np.nan
-    # Izračun radnih dana između dva datuma (isključuje vikende)
     bdays = np.busd_count(start_date.date(), end_date.date())
     return int(bdays)
 
 # ---- PRIPREMA PODATAKA I IZRAČUNI ----
-# 1. Početni status po hijerarhiji: Novo -> ako nema, Backorder -> ako nema, Webshop - Novo
 def get_start_status_date(row):
     if pd.notna(row['Novo']):
         return row['Novo'], 'Novo'
@@ -56,12 +60,11 @@ def get_start_status_date(row):
     else:
         return pd.NaT, 'Nepoznato'
 
-# Primjena izračuna na cijeli dataframe
 start_dates_info = df.apply(get_start_status_date, axis=1)
 df['Početni_Datum'] = [x[0] for x in start_dates_info]
 df['Početni_Status_Tip'] = [x[1] for x in start_dates_info]
 
-# Izračun dana do odobrene isporuke
+# Izračuni dana prema tvojim pravilima
 df['Dana_Do_Odobrenja_Ukupno'] = df.apply(
     lambda row: calc_business_days(row['Početni_Datum'], row['Odobrena isporuka']), axis=1
 )
@@ -81,12 +84,11 @@ df['Dana_CekaRaspolozivost_Do_Odobrenja'] = df.apply(
 # ---- SIDEBAR FILTRI ----
 st.sidebar.header("🔍 Filtri")
 
-# Filter skladišta
-skladaista = ['Sva skladišta'] + sorted(df['Skladište'].dropna().unique().tolist())
-selected_skladdiste = st.sidebar.selectbox("Skladište", skladaista)
+skladista = ['Sva skladišta'] + sorted(df['Skladište'].dropna().unique().tolist())
+selected_skladiste = st.sidebar.selectbox("Skladište", skladista)
 
-if selected_skladdiste != 'Sva skladišta':
-    df_filtered = df[df['Skladište'] == selected_skladdiste]
+if selected_skladiste != 'Sva skladišta':
+    df_filtered = df[df['Skladište'] == selected_skladiste]
 else:
     df_filtered = df.copy()
 
