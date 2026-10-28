@@ -148,26 +148,32 @@ if selected_skladiste != 'Sva skladišta':
 else:
     df_filtered = df.copy()
 
-# ---- AŽURIRANE KPI KARTICE ----
-col1, col2, col3, col4, col5 = st.columns(5)
+# ---- AŽURIRANE KPI KARTICE (2 reda po 3 kartice) ----
+row1_col1, row1_col2, row1_col3 = st.columns(3)
 
-with col1:
+with row1_col1:
+    avg_total = df_filtered['Dana_Do_Odobrenja_Ukupno'].mean()
+    st.metric("Prosjek (Ukupno: Novo -> Odobreno)", f"{avg_total:.1f} rad. dana" if pd.notna(avg_total) else "N/A")
+
+with row1_col2:
     avg_direct = df_filtered['Dana_Novo_Do_Odobrenja_Direktno'].mean()
     st.metric("Prosjek (Direktno: Novo -> Odobreno)", f"{avg_direct:.1f} rad. dana" if pd.notna(avg_direct) else "N/A")
 
-with col2:
+with row1_col3:
     avg_novo_rez = df_filtered['Dana_Novo_Do_Rezervacija'].mean()
     st.metric("Prosjek (Novo -> Rezervacija)", f"{avg_novo_rez:.1f} rad. dana" if pd.notna(avg_novo_rez) else "N/A")
 
-with col3:
+row2_col1, row2_col2, row2_col3 = st.columns(3)
+
+with row2_col1:
     avg_novo_prio = df_filtered['Dana_Novo_Do_Prioritetne'].mean()
     st.metric("Prosjek (Novo -> Prioritetna rez.)", f"{avg_novo_prio:.1f} rad. dana" if pd.notna(avg_novo_prio) else "N/A")
 
-with col4:
+with row2_col2:
     avg_novo_ceka = df_filtered['Dana_Novo_Do_Ceka'].mean()
     st.metric("Prosjek (Novo -> Čeka raspol.)", f"{avg_novo_ceka:.1f} rad. dana" if pd.notna(avg_novo_ceka) else "N/A")
 
-with col5:
+with row2_col3:
     avg_ceka_odobreno = df_filtered['Dana_CekaRaspolozivost_Do_Odobrenja'].mean()
     st.metric("Prosjek (Čeka raspol. -> Odobreno)", f"{avg_ceka_odobreno:.1f} rad. dana" if pd.notna(avg_ceka_odobreno) else "N/A")
 
@@ -186,10 +192,10 @@ with col_a:
 with col_b:
     st.subheader("📈 Prosječni broj dana po statusima")
     metrics_avg = pd.DataFrame({
-        'Faza': ['Direktno (Novo->Odobreno)', 'Novo -> Rezervacija', 'Novo -> Čeka raspol.', 'Čeka raspol. -> Odobreno'],
+        'Faza': ['Ukupno (Novo->Odobreno)', 'Direktno (Novo->Odobreno)', 'Novo -> Čeka raspol.', 'Čeka raspol. -> Odobreno'],
         'Prosjek radnih dana': [
+            df_filtered['Dana_Do_Odobrenja_Ukupno'].mean(),
             df_filtered['Dana_Novo_Do_Odobrenja_Direktno'].mean(),
-            df_filtered['Dana_Novo_Do_Rezervacija'].mean(),
             df_filtered['Dana_Novo_Do_Ceka'].mean(),
             df_filtered['Dana_CekaRaspolozivost_Do_Odobrenja'].mean()
         ]
